@@ -114,7 +114,7 @@ part = xp.Particles(p0c=6.5e12, x=[1e-3,2e-3,3e-3])
 # The record is by default disabled and can be enabled using the following
 # dedicated method of the tracker object. The argument `capacity` defines the
 # number of items that can be stored in each element of the internal record
-# (tha same space are shared for all the elements of the same type). The returned
+# (the same space is shared for all the elements of the same type). The returned
 # object (called `record` in the following) will be filled with the recorded
 # data when the tracker is run. The recording stops when the full capacity is reached.
 
