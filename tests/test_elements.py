@@ -27,15 +27,19 @@ def test_constructor(test_context):
         xt.SRotation(_context=test_context, angle=4),
         xt.XRotation(_context=test_context, angle=1.8),
         xt.YRotation(_context=test_context, angle=2.4),
+        xt.ZetaShift(_context=test_context, dzeta=3E-4),
         xt.XYShift(_context=test_context, dx=1),
         xt.DipoleEdge(_context=test_context, h=1),
         xt.LimitRect(_context=test_context, min_x=5),
         xt.LimitRectEllipse(_context=test_context, max_x=6),
         xt.LimitEllipse(_context=test_context, a=10),
-        xt.LimitRacetrack(_context=test_context, min_x=2),
+        xt.LimitRacetrack(_context=test_context, min_x=-3, max_x=4,
+                           min_y=2, max_y=3, a=0.2, b=0.3),
         xt.LimitPolygon(_context=test_context, x_vertices=[1,-1,-1,1], y_vertices=[1,1,-1,-1]),
         xt.Elens(_context=test_context, inner_radius=0.1),
-        xt.Wire(_context=test_context, current=3.)
+        xt.Wire(_context=test_context, current=3.),
+        xt.Exciter(_context=test_context, knl=[1], samples=[1,2,3],
+                   sampling_frequency=1e3),
     ]
 
     # test to_dict / from_dict
@@ -114,14 +118,17 @@ def test_backtrack(test_context):
         xt.SRotation(_context=test_context, angle=4),
         xt.XRotation(_context=test_context, angle=0.3),
         xt.YRotation(_context=test_context, angle=0.7),
+        xt.ZetaShift(_context=test_context, dzeta=3E-4),
         xt.XYShift(_context=test_context, dx=1),
         xt.DipoleEdge(_context=test_context, h=1),
         xt.LimitRect(_context=test_context, min_x=5),
         xt.LimitRectEllipse(_context=test_context, max_x=6),
         xt.LimitEllipse(_context=test_context, a=10),
-        xt.LimitRacetrack(_context=test_context, min_x=2),
+        xt.LimitRacetrack(_context=test_context, min_x=-3, max_x=4,
+                           min_y=2, max_y=3, a=0.2, b=0.3),
         xt.LimitPolygon(_context=test_context, x_vertices=[1,-1,-1,1], y_vertices=[1,1,-1,-1]),
         xt.Elens(_context=test_context, inner_radius=0.1),
+        xt.Exciter(_context=test_context, knl=[1], samples=[1,2,3], sampling_frequency=1e3),
     ]
 
     dtk_particle = dtk.TestParticles(
@@ -209,13 +216,10 @@ def test_drift_exact(test_context):
                                        _context=test_context)
 
     drift = xt.Drift(_context=test_context, length=10.)
-    tracker = xt.Tracker(
-        line=xt.Line(elements=[drift]),
-        compile=False,
-        _context=test_context,
-    )
-    tracker.config.XTRACK_USE_EXACT_DRIFTS = True
-    tracker.track(particles)
+    line = xt.Line(elements=[drift])
+    line.build_tracker(compile=False, _context=test_context)
+    line.config.XTRACK_USE_EXACT_DRIFTS = True
+    line.track(particles)
 
     dtk_drift = dtk.elements.DriftExact(length=10.)
     dtk_drift.track(dtk_particle)
@@ -836,6 +840,40 @@ def test_cavity(test_context):
     assert np.allclose(part.rvv, beta/part.beta0, atol=1e-14, rtol=0)
     assert np.allclose(tau, tau0, atol=1e-14, rtol=0)
     assert np.allclose((part.ptau - part0.ptau) * part0.p0c, 30, atol=1e-9, rtol=0)
+
+@for_all_test_contexts
+def test_exciter(test_context):
+    fs = 2.99792458e8 # sampling frequency in Hz
+    frev = 2.99792458e8 # revolution frequency in Hz
+    k0l = -0.1 # this is scaled by the waveform
+    signal = [1,2,3] # this is the waveform
+    duration = 4/fs
+    exciter = xt.Exciter(samples=signal, sampling_frequency=fs,
+                        frev=frev, start_turn=0, knl=[k0l], duration=duration)
+
+    line = xt.Line([exciter])
+    tracker = line.build_tracker(_context=test_context)
+
+    particles = xp.Particles(p0c=6.5e12, zeta=[0,-1,-2], _context=test_context)
+    num_particles = len(particles.zeta)
+
+    tracker.track(particles, num_turns=1)
+    expected_px = np.array([0.1, 0.2, 0.3])
+    particles.move(_context=xo.context_default)
+
+    assert np.allclose(particles.px, expected_px)
+
+    particles.move(_context=test_context)
+    tracker.track(particles, num_turns=1)
+    expected_px += np.array([0.2, 0.3, 0.1])
+    particles.move(_context=xo.context_default)
+    assert np.allclose(particles.px, expected_px)
+
+    particles.move(_context=test_context)
+    tracker.track(particles, num_turns=1)
+    expected_px += np.array([0.3, 0.1, 0])
+    particles.move(_context=xo.context_default)
+    assert np.allclose(particles.px, expected_px)
 
 
 test_source = r"""

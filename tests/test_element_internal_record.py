@@ -23,10 +23,6 @@ def test_record_single_table(test_context):
             }
 
     extra_src = []
-    extra_src.extend([
-        xp._pkg_root.joinpath('random_number_generator/rng_src/base_rng.h'),
-        xp._pkg_root.joinpath('random_number_generator/rng_src/local_particle_rng.h'),
-        ])
 
     extra_src.append(r'''
         /*gpufun*/
@@ -45,7 +41,7 @@ def test_record_single_table(test_context):
             //start_per_particle_block (part0->part)
 
                 for (int64_t i = 0; i < n_kicks; i++) {
-                    double rr = 1e-6 * LocalParticle_generate_random_double(part);
+                    double rr = 1e-6 * RandomUniform_generate(part);
                     LocalParticle_add_to_px(part, rr);
 
                     if (record){
@@ -77,22 +73,25 @@ def test_record_single_table(test_context):
 
         _internal_record_class = TestElementRecord
 
+        _depends_on = [xt.RandomUniform]
+
         _extra_c_sources = extra_src
 
     n_kicks0 = 5
     n_kicks1 = 3
-    tracker = xt.Tracker(_context=test_context, line=xt.Line(elements = [
-        TestElement(n_kicks=n_kicks0), TestElement(n_kicks=n_kicks1)]))
-    tracker.line._needs_rng = True
+    line=xt.Line(elements = [
+        TestElement(n_kicks=n_kicks0), TestElement(n_kicks=n_kicks1)])
+    line._needs_rng = True
+    line.build_tracker(_context=test_context)
 
-    record = tracker.start_internal_logging_for_elements_of_type(
+    record = line.start_internal_logging_for_elements_of_type(
                                                         TestElement, capacity=10000)
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
     num_turns0 = 10
     num_turns1 = 3
-    tracker.track(part, num_turns=num_turns0)
-    tracker.track(part, num_turns=num_turns1)
+    line.track(part, num_turns=num_turns0)
+    line.track(part, num_turns=num_turns1)
 
     num_recorded = record._index.num_recorded
     num_turns = num_turns0 + num_turns1
@@ -110,30 +109,30 @@ def test_record_single_table(test_context):
                                                             * (n_kicks0 + n_kicks1))
 
     # Check reached capacity
-    record = tracker.start_internal_logging_for_elements_of_type(
+    record = line.start_internal_logging_for_elements_of_type(
                                                         TestElement, capacity=20)
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
     num_turns0 = 10
     num_turns1 = 3
-    tracker.track(part, num_turns=num_turns0)
-    tracker.track(part, num_turns=num_turns1)
+    line.track(part, num_turns=num_turns0)
+    line.track(part, num_turns=num_turns1)
 
     num_recorded = record._index.num_recorded
     assert num_recorded == 20
 
 
     # Check stop
-    record = tracker.start_internal_logging_for_elements_of_type(
+    record = line.start_internal_logging_for_elements_of_type(
                                                         TestElement, capacity=10000)
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
     num_turns0 = 10
     num_turns1 = 3
     num_particles = len(part.x)
-    tracker.track(part, num_turns=num_turns0)
-    tracker.stop_internal_logging_for_elements_of_type(TestElement)
-    tracker.track(part, num_turns=num_turns1)
+    line.track(part, num_turns=num_turns0)
+    line.stop_internal_logging_for_elements_of_type(TestElement)
+    line.track(part, num_turns=num_turns1)
 
     num_recorded = record._index.num_recorded
     num_turns = num_turns0
@@ -157,18 +156,19 @@ def test_record_single_table(test_context):
     elements = [
         TestElement(n_kicks=n_kicks0, _context=test_context), TestElement(n_kicks=n_kicks1)]
     elements[0].iscollective = True
-    tracker = xt.Tracker(_context=test_context, line=xt.Line(elements=elements))
-    tracker.line._needs_rng = True
+    line=xt.Line(elements=elements)
+    line.build_tracker(_context=test_context)
+    line._needs_rng = True
 
-    record = tracker.start_internal_logging_for_elements_of_type(
+    record = line.start_internal_logging_for_elements_of_type(
                                                         TestElement, capacity=10000)
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
     num_turns0 = 10
     num_turns1 = 3
-    tracker.track(part, num_turns=num_turns0)
-    tracker.stop_internal_logging_for_elements_of_type(TestElement)
-    tracker.track(part, num_turns=num_turns1)
+    line.track(part, num_turns=num_turns0)
+    line.stop_internal_logging_for_elements_of_type(TestElement)
+    line.track(part, num_turns=num_turns1)
 
     # Checks
     part.move(_context=xo.ContextCpu())
@@ -217,10 +217,6 @@ def test_record_multiple_tables(test_context):
             }
 
     extra_src = []
-    extra_src.extend([
-        xp._pkg_root.joinpath('random_number_generator/rng_src/base_rng.h'),
-        xp._pkg_root.joinpath('random_number_generator/rng_src/local_particle_rng.h'),
-        ])
 
     extra_src.append(r'''
         /*gpufun*/
@@ -266,7 +262,7 @@ def test_record_multiple_tables(test_context):
                 }
 
                 for (int64_t i = 0; i < n_kicks; i++) {
-                    double rr = 1e-6 * LocalParticle_generate_random_double(part);
+                    double rr = 1e-6 * RandomUniform_generate(part);
                     LocalParticle_add_to_px(part, rr);
 
                     // Record in table2 info about the generated kicks
@@ -298,24 +294,27 @@ def test_record_multiple_tables(test_context):
             }
         _internal_record_class = TestElementRecord
 
+        _depends_on = [xt.RandomUniform]
+
         _extra_c_sources = extra_src
 
 
     # Checks
     n_kicks0 = 5
     n_kicks1 = 3
-    tracker = xt.Tracker(_context=test_context, line=xt.Line(elements = [
-        TestElement(n_kicks=n_kicks0), TestElement(n_kicks=n_kicks1)]))
-    tracker.line._needs_rng = True
+    line=xt.Line(elements = [
+        TestElement(n_kicks=n_kicks0), TestElement(n_kicks=n_kicks1)])
+    line._needs_rng = True
+    line.build_tracker(_context=test_context)
 
-    record = tracker.start_internal_logging_for_elements_of_type(TestElement,
+    record = line.start_internal_logging_for_elements_of_type(TestElement,
                                 capacity={'table1': 10000, 'table2': 10000})
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
     num_turns0 = 10
     num_turns1 = 3
-    tracker.track(part, num_turns=num_turns0)
-    tracker.track(part, num_turns=num_turns1)
+    line.track(part, num_turns=num_turns0)
+    line.track(part, num_turns=num_turns1)
 
     part.move(_context=xo.ContextCpu())
     record.move(_context=xo.ContextCpu())
@@ -342,15 +341,15 @@ def test_record_multiple_tables(test_context):
         assert np.sum((table2.at_turn[:num_recorded_tab2] == i_turn)) == (num_particles
                                                             * (n_kicks0 + n_kicks1))
     # Check reached capacity
-    record = tracker.start_internal_logging_for_elements_of_type(
+    record = line.start_internal_logging_for_elements_of_type(
                                                         TestElement,
                                         capacity={'table1': 20, 'table2': 15})
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
     num_turns0 = 10
     num_turns1 = 3
-    tracker.track(part, num_turns=num_turns0)
-    tracker.track(part, num_turns=num_turns1)
+    line.track(part, num_turns=num_turns0)
+    line.track(part, num_turns=num_turns1)
 
     table1 = record.table1
     table2 = record.table2
@@ -362,7 +361,7 @@ def test_record_multiple_tables(test_context):
 
 
     # Check stop
-    record = tracker.start_internal_logging_for_elements_of_type(
+    record = line.start_internal_logging_for_elements_of_type(
                                         TestElement,
                                         capacity={'table1': 1000, 'table2': 1000})
 
@@ -371,9 +370,9 @@ def test_record_multiple_tables(test_context):
     num_turns1 = 3
     num_particles = len(part.x)
 
-    tracker.track(part, num_turns=num_turns0)
-    tracker.stop_internal_logging_for_elements_of_type(TestElement)
-    tracker.track(part, num_turns=num_turns1)
+    line.track(part, num_turns=num_turns0)
+    line.stop_internal_logging_for_elements_of_type(TestElement)
+    line.track(part, num_turns=num_turns1)
 
     part.move(_context=xo.ContextCpu())
     record.move(_context=xo.ContextCpu())
@@ -405,19 +404,20 @@ def test_record_multiple_tables(test_context):
     elements = [
         TestElement(n_kicks=n_kicks0, _context=test_context), TestElement(n_kicks=n_kicks1)]
     elements[0].iscollective = True
-    tracker = xt.Tracker(_context=test_context, line=xt.Line(elements=elements))
-    tracker.line._needs_rng = True
+    line = xt.Line(elements=elements)
+    line.build_tracker(_context=test_context)
+    line.line._needs_rng = True
 
-    record = tracker.start_internal_logging_for_elements_of_type(
+    record = line.start_internal_logging_for_elements_of_type(
                                         TestElement,
                                         capacity={'table1': 1000, 'table2': 1000})
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
     num_turns0 = 10
     num_turns1 = 3
-    tracker.track(part, num_turns=num_turns0)
-    tracker.stop_internal_logging_for_elements_of_type(TestElement)
-    tracker.track(part, num_turns=num_turns1)
+    line.track(part, num_turns=num_turns0)
+    line.stop_internal_logging_for_elements_of_type(TestElement)
+    line.track(part, num_turns=num_turns1)
 
     # Checks
     part.move(_context=xo.ContextCpu())
@@ -474,10 +474,6 @@ def test_record_standalone_mode(test_context):
             }
 
     extra_src = []
-    extra_src.extend([
-        xp._pkg_root.joinpath('random_number_generator/rng_src/base_rng.h'),
-        xp._pkg_root.joinpath('random_number_generator/rng_src/local_particle_rng.h'),
-        ])
 
     extra_src.append(r'''
         /*gpufun*/
@@ -523,7 +519,7 @@ def test_record_standalone_mode(test_context):
                 }
 
                 for (int64_t i = 0; i < n_kicks; i++) {
-                    double rr = 1e-6 * LocalParticle_generate_random_double(part);
+                    double rr = 1e-6 * RandomUniform_generate(part);
                     LocalParticle_add_to_px(part, rr);
 
                     // Record in table2 info about the generated kicks
@@ -555,6 +551,8 @@ def test_record_standalone_mode(test_context):
             }
         _internal_record_class = TestElementRecord
 
+        _depends_on = [xt.RandomUniform]
+
         _extra_c_sources = extra_src
 
 
@@ -570,6 +568,7 @@ def test_record_standalone_mode(test_context):
                             capacity={'table1': 10000, 'table2': 10000})
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
+    part._init_random_number_generator()
     num_turns0 = 10
     num_turns1 = 3
 
@@ -610,6 +609,7 @@ def test_record_standalone_mode(test_context):
                             capacity={'table1': 20, 'table2': 15})
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
+    part._init_random_number_generator()
     num_turns0 = 10
     num_turns1 = 3
     for i_turn in range(num_turns0 + num_turns1):
@@ -633,6 +633,7 @@ def test_record_standalone_mode(test_context):
                             capacity={'table1': 10000, 'table2': 10000})
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
+    part._init_random_number_generator()
     num_turns0 = 10
     num_turns1 = 3
     num_particles = len(part.x)
@@ -680,6 +681,7 @@ def test_record_standalone_mode(test_context):
                             capacity={'table1': 10000, 'table2': 10000})
 
     part = xp.Particles(_context=test_context, p0c=6.5e12, x=[1e-3,2e-3,3e-3])
+    part._init_random_number_generator()
     num_turns0 = 10
     num_turns1 = 3
 
